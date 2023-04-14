@@ -1,2 +1,4 @@
 typer
-
+polars
+streamlit
+sqlalchemy
