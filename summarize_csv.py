@@ -4,6 +4,7 @@ import typer
 
 app = typer.Typer()
 
+
 def replace_spaces_in_headers(headers: List[str]) -> dict:
     """
     Replaces spaces in headers
@@ -14,7 +15,8 @@ def replace_spaces_in_headers(headers: List[str]) -> dict:
     Returns:
         dict: the mapping dictionary to column names without spaces
     """
-    return {header:header.strip().replace(" ", "_") for header in headers}
+    return {header: header.strip().replace(" ", "_") for header in headers}
+
 
 def rename_keys(row: dict, keys: dict) -> dict:
     """
@@ -27,7 +29,8 @@ def rename_keys(row: dict, keys: dict) -> dict:
     Returns:
         dict: the csv row as dict where keys do not have spaces
     """
-    return {keys[key]:val for key,val in row.items()}
+    return {keys[key]: val for key, val in row.items()}
+
 
 def read_csv_file(file_path: str) -> Tuple[List[str], List[dict]]:
     """
@@ -36,15 +39,15 @@ def read_csv_file(file_path: str) -> Tuple[List[str], List[dict]]:
     Returns:
         Tuple[headers, rows]: the headers (list) and rows (list of dictionaries) of the csv
     """
-   
+
     try:
         with open(file_path, encoding="iso8859-1") as f:
-            reader = csv.DictReader(f, delimiter=';')
+            reader = csv.DictReader(f, delimiter=";")
             headers = replace_spaces_in_headers(reader.fieldnames)
             rows = [rename_keys(row, headers) for row in reader]
 
             return list(headers.values()), rows
-        
+
     except FileNotFoundError:
         print(f"Error: File '{file_path}' not found.")
         exit(1)
@@ -54,7 +57,8 @@ def read_csv_file(file_path: str) -> Tuple[List[str], List[dict]]:
 
 
 def summarize_column(column_values: List[str]) -> dict:
-    """Summarizes a singe column value list
+    """
+    Summarizes a singe column value list
 
     Args:
         column_values (List[str]): the value list
@@ -73,7 +77,11 @@ def summarize_column(column_values: List[str]) -> dict:
 
 
 @app.command()
-def summarize_csv(filename: str, column_name:Optional[str] = typer.Argument(None), print_headers:Optional[bool] = typer.Argument(False)):
+def summarize_csv(
+    filename: str,
+    column_name: Optional[str] = typer.Argument(None),
+    print_headers: Optional[bool] = typer.Argument(False),
+):
     headers, rows = read_csv_file(filename)
     if print_headers:
         print(headers)
@@ -83,27 +91,32 @@ def summarize_csv(filename: str, column_name:Optional[str] = typer.Argument(None
             summary = summarize_column([row[column_name] for row in rows])
         else:
             print(f"Error: column '{column_name}' not found in headers: {headers}.")
-            exit(1) 
+            exit(1)
     else:
         # if some are to be excluded better to that in one go
-        summary_headers = [header for header in headers if header not in (
-            "Betrag", 
-            "BIC_(SWIFT-Code)", 
-            "Kontonummer/IBAN", 
-            "Beguenstigter/Zahlungspflichtiger", 
-            "Sammlerreferenz", 
-            "Kundenreferenz_(End-to-End)",
-            "Mandatsreferenz",
-            "Glaeubiger_ID",
-            "Verwendungszweck",
-            "Auftragskonto",
-            "Buchungstag",
-            "Valutadatum")]
+        summary_headers = [
+            header
+            for header in headers
+            if header
+            not in (
+                "Betrag",
+                "BIC_(SWIFT-Code)",
+                "Kontonummer/IBAN",
+                "Beguenstigter/Zahlungspflichtiger",
+                "Sammlerreferenz",
+                "Kundenreferenz_(End-to-End)",
+                "Mandatsreferenz",
+                "Glaeubiger_ID",
+                "Verwendungszweck",
+                "Auftragskonto",
+                "Buchungstag",
+                "Valutadatum",
+            )
+        ]
         summary = {}
         for header in summary_headers:
             summary[header] = summarize_column([row[header] for row in rows])
     print(summary)
-
 
 
 if __name__ == "__main__":
