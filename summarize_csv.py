@@ -1,13 +1,12 @@
 import csv
-from collections import Counter
-from typing import List, Dict, Tuple, Optional
-from collections import defaultdict
+from typing import List, Tuple, Optional
 import typer
 
 app = typer.Typer()
 
 def replace_spaces_in_headers(headers: List[str]) -> dict:
-    """replaces spaces in headers
+    """
+    Replaces spaces in headers
 
     Args:
         headers (List[str]): the original header list
@@ -18,7 +17,8 @@ def replace_spaces_in_headers(headers: List[str]) -> dict:
     return {header:header.strip().replace(" ", "_") for header in headers}
 
 def rename_keys(row: dict, keys: dict) -> dict:
-    """rename keys for an individual row
+    """
+    Rename keys for an individual row
 
     Args:
         row (dict): The csv row as dict
@@ -71,14 +71,22 @@ def summarize_column(column_values: List[str]) -> dict:
 
     return category_counts
 
-def column_summary(column_name:str, rows: List[dict]) -> dict:
-    return summarize_column([row[column_name] for row in rows])
-   
 
-def all_column_summary(headers:List[str], rows: List[dict] ) -> dict:
-    summary = {}
-    for header in headers:
-        if header not in (
+@app.command()
+def summarize_csv(filename: str, column_name:Optional[str] = typer.Argument(None), print_headers:Optional[bool] = typer.Argument(False)):
+    headers, rows = read_csv_file(filename)
+    if print_headers:
+        print(headers)
+
+    if column_name is not None:
+        if column_name in headers:
+            summary = summarize_column([row[column_name] for row in rows])
+        else:
+            print(f"Error: column '{column_name}' not found in headers: {headers}.")
+            exit(1) 
+    else:
+        # if some are to be excluded better to that in one go
+        summary_headers = [header for header in headers if header not in (
             "Betrag", 
             "BIC_(SWIFT-Code)", 
             "Kontonummer/IBAN", 
@@ -90,26 +98,10 @@ def all_column_summary(headers:List[str], rows: List[dict] ) -> dict:
             "Verwendungszweck",
             "Auftragskonto",
             "Buchungstag",
-            "Valutadatum"):
-            summary[header] = column_summary(header, rows)
-    
-    return summary
-
-
-@app.command()
-def summarize_csv(filename: str, column_name:Optional[str] = typer.Argument(None), print_headers:Optional[bool] = typer.Argument(False)):
-    headers, rows = read_csv_file(filename)
-    if print_headers:
-        print(headers)
-
-    if column_name is not None:
-        if column_name in headers:
-            summary = column_summary(column_name, rows)
-        else:
-            print(f"Error: column '{column_name}' not found in headers: {headers}.")
-            exit(1) 
-    else:
-        summary = all_column_summary(headers, rows)
+            "Valutadatum")]
+        summary = {}
+        for header in summary_headers:
+            summary[header] = summarize_column([row[header] for row in rows])
     print(summary)
 
 
