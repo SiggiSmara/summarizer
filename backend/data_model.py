@@ -18,7 +18,7 @@ class TransactionType(enum.Enum):
     credit = "credit"
 
 class Transaction(Base):
-    __tablename__ = "transaction"
+    __tablename__ = "transaction_base"
     id: Mapped[int] = mapped_column(primary_key=True)
     booking_date: Mapped[datetime] = mapped_column(DateTime(timezone=False))
     value_date: Mapped[datetime] = mapped_column(DateTime(timezone=False))
@@ -48,7 +48,7 @@ class TransactionDetailType(Base):
 class TransactionDetail(Base):
     __tablename__ = "transaction_detail"
     id: Mapped[int] = mapped_column(primary_key=True)
-    transaction_id: Mapped[int] = mapped_column(ForeignKey("transaction.id"))
+    transaction_id: Mapped[int] = mapped_column(ForeignKey("transaction_base.id"))
     transaction_detail_type_id: Mapped[int] = mapped_column(ForeignKey("transaction_detail_type.id"))
     description: Mapped[str]
 

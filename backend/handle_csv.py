@@ -1,7 +1,7 @@
 from typing import List, Tuple, Optional, Dict
 from datetime import datetime
 import polars as pl
-from sqlalchemy import select, insert, and_
+from sqlalchemy import select, insert, and_, or_, text
 
 from data_model import (
     Transaction,
@@ -54,6 +54,7 @@ class handleCSV:
             if header not in self.column_mapping.col_list
         ]
         self.detail_mapping = self.sync_detail_types()
+        self.rev_detail_mapping = {val:key for key, val in self.detail_mapping.items()}
 
     def read_csv_file(self) -> pl.DataFrame:
         """
@@ -152,22 +153,28 @@ class handleCSV:
         Returns:
             List[int]: the list of ids matchin the incoming data
         """
-        stmt = select(Transaction.id).where(
+        my_booking_date = row[MappedCols.booking_date_col.value]
+        my_value_date = row[MappedCols.value_date_col.value]
+        stmt: select = select(Transaction.id).where(
             and_(
                 Transaction.amount == row[MappedCols.amount_col.value],
-                Transaction.booking_date == row[MappedCols.booking_date_col.value],
-                Transaction.value_date == row[MappedCols.value_date_col.value],
-                Transaction.tr_type == row[MappedCols.tr_type_col.value],
+                Transaction.booking_date
+                == datetime(
+                    my_booking_date.year, my_booking_date.month, my_booking_date.day
+                ),
+                Transaction.value_date
+                == datetime(my_value_date.year, my_value_date.month, my_value_date.day),
+                Transaction.tr_type
+                == TransactionType(row[MappedCols.tr_type_col.value]),
             )
         )
-
         with self.db_engine.connect() as conn:
-            found_ids = conn.execute(stmt).scalar()
+            found_ids = conn.execute(stmt).scalars().all()
             if found_ids is not None:
-                found_ids = found_ids.all()
+                found_ids = self.find_transaction_details(row=row, ids=found_ids)
         return found_ids
 
-    def find_transaction_details(self, row: dict, ids: List[int]) -> dict:
+    def find_transaction_details(self, row: dict, ids: List[int]) -> List[int]:
         """
         Finds matching transaction details for matching transaction ids.
 
@@ -177,9 +184,28 @@ class handleCSV:
 
 
         Returns:
-            dict: the dictionary of lists of transaction detail ids matching the incoming data
+            List[int]: the lists of transaction detail ids matching the incoming data
         """
-        return {}
+        found_ids = []
+        for oneid in ids:
+            stmt: select = select(TransactionDetail).where(
+                TransactionDetail.transaction_id == oneid
+            )
+            found_dict = {}
+            with self.db_engine.connect() as conn:
+                for one_found in conn.execute(stmt).all():
+                    rev_detail = self.rev_detail_mapping[
+                        one_found._mapping["transaction_detail_type_id"]
+                    ]
+                    if (
+                        rev_detail in self.column_mapping.unicity_cols
+                        and one_found._mapping["description"] == row[rev_detail]
+                    ):
+                        found_dict[rev_detail] = one_found._mapping["description"]
+            if len(found_dict) == len(self.column_mapping.unicity_cols):
+                found_ids.append(oneid)
+
+        return found_ids
 
     def insert_data(self):
         for row in self.df.rows(named=True):
@@ -187,7 +213,6 @@ class handleCSV:
             if duplicates is not None and len(duplicates) != 0:
                 # possible duplicates found, deal with it
                 print(f"error found duplicates of row: {row}")
-                print(duplicates)
             else:
                 # all good, lets instert some data
                 self.insert_one_row(row=row)
@@ -205,13 +230,15 @@ class handleCSV:
             amount=row[MappedCols.amount_col.value],
             tr_type=row[MappedCols.tr_type_col.value],
         )
+        
         for detail, db_id in self.detail_mapping.items():
             if row[detail]:
-                self.insert_trans_detail(
+                detail_id = self.insert_trans_detail(
                     transaction_id=transaction_id,
                     transaction_detail_type_id=db_id,
                     description=row[detail],
                 )
+                
 
     def insert_transaction(
         self,
@@ -234,7 +261,7 @@ class handleCSV:
         """
         stmt = insert(Transaction).returning(Transaction.id)
         with self.db_engine.connect() as conn:
-            trans_id:int = conn.execute(
+            trans_id: int = conn.execute(
                 stmt,
                 [
                     {
@@ -277,6 +304,15 @@ class handleCSV:
             conn.commit()
         return trans_detail_id
 
+    def get_trans_count(self):
+        stmt = select(Transaction.id)
+        # stmt = text('select * from transaction_base where transaction_base.amount = 98.1')
+        with self.db_engine.connect() as conn:
+            res = conn.execute(stmt).all()
+            
+            cnt = len(res)
+        return cnt
+
 
 if __name__ == "__main__":
     from db import engine
@@ -287,14 +323,23 @@ if __name__ == "__main__":
         value_date_col="valutadatum",
         category_col=None,
         date_format_str="%d.%m.%y",
+        unicity_cols=[
+            "Buchungstext".lower(),
+            "Verwendungszweck".lower(),
+            "Beguenstigter/Zahlungspflichtiger".lower(),
+            "Kontonummer/IBAN".lower(),
+        ],
     )
 
     my_csvparam = csvParams(separator=";", encoding="iso8859-1")
 
     mydata = handleCSV(
         file_path="20230414-101179311-umsatz.CSV",
+        # file_path="duplicates.CSV",
         csv_params=my_csvparam,
         column_mapping=my_mapping,
         db_engine=engine,
     )
-    print(mydata.df.head(5))
+    # print(mydata.df.head(5))
+    mydata.insert_data()
+    print(mydata.get_trans_count())

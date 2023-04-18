@@ -1,5 +1,5 @@
 import enum
-
+from typing import List
 class MappedCols(enum.Enum):
     amount_col =  "amount"
     booking_date_col =  "booking_date"
@@ -20,13 +20,15 @@ class columnMapping():
         value_date_col: str,
         category_col: str,
         date_format_str: str,
+        unicity_cols: List[str] = []
     ):
         self.amount_col = amount_col
         self.booking_date_col = booking_date_col
         self.value_date_col = value_date_col
         self.category_col = category_col
         self.date_format_str = date_format_str
-        self.col_list = [self.amount_col, self.booking_date_col, self.value_date_col]
+        self.unicity_cols = unicity_cols
+        self.col_list = [self.amount_col, self.booking_date_col, self.value_date_col, "tr_type"]
 
     def clean_name(self, col_name: str) -> str:
         """
